@@ -35,18 +35,16 @@ const getFallbackImage = (text: string, random: boolean = false) => {
   return LUXURY_FALLBACKS[index];
 };
 
-// Safe access to process.env to prevent crashes in browsers where process is undefined
+// Simplified API Key access to work with bundlers (Netlify/Vite/CRA)
+// We access process.env.API_KEY directly so the build tool can replace it with the string literal.
 const getApiKey = (): string | undefined => {
   try {
-    // @ts-ignore - process might not be defined in all browser builds
-    if (typeof process !== 'undefined' && process.env) {
-       // @ts-ignore
-       return process.env.API_KEY;
-    }
+    // @ts-ignore
+    return process.env.API_KEY;
   } catch (e) {
+    // If process is undefined and not replaced by bundler, return undefined
     return undefined;
   }
-  return undefined;
 };
 
 /**
@@ -80,23 +78,29 @@ const enhancePromptForImage = async (userPrompt: string, ai: GoogleGenAI): Promi
  * @returns A base64 string of the image or a fallback URL.
  */
 export const generateWishImage = async (prompt: string, forceRegen: boolean = false): Promise<string> => {
-  // 1. Safe API Key Check
+  // 1. Get Key directly
   const apiKey = getApiKey();
-  const isValidKey = apiKey && apiKey !== 'undefined' && apiKey.trim().length > 20;
-
-  if (!isValidKey) {
-    console.log("Modo Offline: Usando imagen de respaldo de lujo.");
+  
+  // Basic validation just to avoid empty string crashes, but trust the env mostly
+  if (!apiKey || apiKey === 'undefined') {
+    console.log("No API Key found in process.env.API_KEY. Using fallback.");
     return getFallbackImage(prompt, forceRegen);
   }
 
-  // 2. Try Generation with Safe Failover
+  // 2. Try Generation
   try {
-    const ai = new GoogleGenAI({ apiKey: apiKey! });
+    const ai = new GoogleGenAI({ apiKey: apiKey });
     
     // Step 1: Optimize prompt (Spanish -> English Visual Description)
-    const enhancedPrompt = await enhancePromptForImage(prompt, ai);
+    // We wrap this in a sub-try/catch so if the text model fails, we still try the image model with raw prompt
+    let enhancedPrompt = prompt;
+    try {
+        enhancedPrompt = await enhancePromptForImage(prompt, ai);
+    } catch (err) {
+        console.warn("Text enhancement skipped:", err);
+    }
     
-    console.log("Generando imagen con IA...");
+    console.log("Generando imagen con IA (Gemini 2.5)...");
 
     // Step 2: Generate Image
     const response = await ai.models.generateContent({
@@ -122,9 +126,9 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
     
     console.warn("Gemini produced no image data, using fallback.");
     return getFallbackImage(prompt, forceRegen);
+
   } catch (error) {
-    console.error("Error en generación de imagen (usando respaldo):", error);
-    // Return a dynamic fallback so the user always sees an image
+    console.error("Error API Gemini (usando respaldo):", error);
     return getFallbackImage(prompt, forceRegen);
   }
 };
@@ -134,14 +138,13 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
  */
 export const generateActionPlan = async (title: string, amount: number): Promise<string> => {
   const apiKey = getApiKey();
-  const isValidKey = apiKey && apiKey !== 'undefined' && apiKey.trim().length > 20;
-
-  if (!isValidKey) {
+  
+  if (!apiKey || apiKey === 'undefined') {
     return "1. Define tu objetivo con claridad absoluta.\n2. Ahorra e invierte el 20% de tus ingresos consistentemente.\n3. Visualiza el éxito diariamente y actúa como si ya fuera tuyo.";
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: apiKey! });
+    const ai = new GoogleGenAI({ apiKey: apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
