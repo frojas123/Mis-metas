@@ -38,10 +38,10 @@ const CATEGORIZED_FALLBACKS = {
 
 // Keywords to map input text to categories
 const KEYWORDS = {
-  VEHICLES: ['auto', 'carro', 'coche', 'ferrari', 'lamborghini', 'porsche', 'bmw', 'mercedes', 'moto', 'yate', 'barco', 'jet', 'avion', 'avión', 'tesla', 'camioneta'],
-  TRAVEL: ['viaje', 'trip', 'paris', 'roma', 'playa', 'montaña', 'hotel', 'resort', 'vacaciones', 'mundo', 'japon', 'dubai', 'grecia'],
-  TECH: ['computadora', 'pc', 'macbook', 'iphone', 'celular', 'camara', 'cámara', 'setup', 'gamer', 'reloj', 'rolex'],
-  HOME: ['casa', 'hogar', 'mansion', 'mansión', 'departamento', 'apartamento', 'muebles', 'sala', 'cocina', 'jardin', 'piscina']
+  VEHICLES: ['auto', 'carro', 'coche', 'ferrari', 'lamborghini', 'porsche', 'bmw', 'mercedes', 'audi', 'moto', 'yate', 'barco', 'jet', 'avion', 'avión', 'tesla', 'camioneta', 'bugatti', 'mclaren'],
+  TRAVEL: ['viaje', 'trip', 'paris', 'roma', 'playa', 'montaña', 'hotel', 'resort', 'vacaciones', 'mundo', 'japon', 'dubai', 'grecia', 'italia', 'suiza'],
+  TECH: ['computadora', 'pc', 'macbook', 'iphone', 'celular', 'camara', 'cámara', 'setup', 'gamer', 'reloj', 'rolex', 'patek'],
+  HOME: ['casa', 'hogar', 'mansion', 'mansión', 'departamento', 'apartamento', 'muebles', 'sala', 'cocina', 'jardin', 'piscina', 'penthouse']
 };
 
 /**
@@ -89,6 +89,7 @@ const getApiKey = (): string | undefined => {
 
 /**
  * Translates prompt to English for better image results.
+ * Optimized to PRESERVE details like Color, Brand, and Model.
  */
 const enhancePromptForImage = async (userPrompt: string, ai: GoogleGenAI): Promise<string> => {
   try {
@@ -96,7 +97,10 @@ const enhancePromptForImage = async (userPrompt: string, ai: GoogleGenAI): Promi
       model: 'gemini-2.5-flash',
       contents: {
         parts: [{
-          text: `Translate this to a simple, direct English prompt for an image generator (photorealistic, 8k). Input: "${userPrompt}"`
+          text: `Translate the following description to English for an AI image generator. 
+          IMPORTANT: Preserve ALL specific details including: Colors, specific Brands (e.g. Ferrari, Rolex, Gucci), Models, and Years. 
+          Do NOT simplify or make it generic. 
+          Input: "${userPrompt}"`
         }]
       }
     });
@@ -114,7 +118,7 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
   
   // 1. Check API Key validity immediately
   if (!apiKey) {
-    console.log("Offline Mode: Returning smart fallback.");
+    console.log("Modo Offline: Usando imagen de respaldo de lujo.");
     return getFallbackImage(prompt, forceRegen);
   }
 
@@ -123,9 +127,11 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
     // Step 1: Optimize prompt
-    // Only enhance if the prompt is longer than 3 words (otherwise it might be simple enough)
     let finalPrompt = prompt;
-    if (prompt.split(' ').length > 3) {
+    
+    // Only enhance if the prompt is longer than 1 word, but ALWAYS run it to ensure English
+    // The previous logic skipped shorts, which caused "Ferrari Rojo" to stay Spanish and confuse the image model
+    if (prompt.trim().length > 0) {
         try {
             finalPrompt = await enhancePromptForImage(prompt, ai);
         } catch (err) {
@@ -133,16 +139,18 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
         }
     }
     
-    console.log(`Generating with prompt: ${finalPrompt}`);
+    console.log(`Prompt original: ${prompt}`);
+    console.log(`Prompt mejorado (Inglés): ${finalPrompt}`);
 
     // Step 2: Generate Image
-    // Note: We use aspect ratio 1:1 and asking for no text to avoid refusals
+    // We removed "luxury" from the end to prevent it from overriding the subject (e.g. turning a car into a luxury garage)
+    // We added "centered, cinematic" to ensure good framing.
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
-            text: `High quality photo of: ${finalPrompt}. Photorealistic, 4k, cinematic lighting, luxury.`,
+            text: `${finalPrompt} . photorealistic, 4k, cinematic lighting, highly detailed.`,
           },
         ],
       },
