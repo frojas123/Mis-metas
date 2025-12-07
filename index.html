@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ManifestApp - Modern Luxury</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              display: ['Outfit', 'sans-serif'], // Fuente moderna para títulos
+            },
+            colors: {
+              manifest: {
+                950: '#050505', // Ultra dark background
+                900: '#0a0a0a',
+                800: '#171717',
+                700: '#262626',
+                500: '#737373',
+                300: '#d4d4d4',
+                200: '#e5e5e5',
+                100: '#f5f5f5',
+              },
+              gold: {
+                100: '#FBF5B7',
+                200: '#F5E086',
+                300: '#EBCB58',
+                400: '#D4AF37',
+                500: '#AA8C2C',
+                600: '#8A6E1E',
+                900: '#211804',
+              }
+            },
+            backgroundImage: {
+              'gold-gradient': 'linear-gradient(135deg, #D4AF37 0%, #FBF5B7 50%, #AA8C2C 100%)',
+              'glass-gradient': 'linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%)',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Luxury Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #050505; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #262626; 
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #404040; 
+      }
+
+      .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+      }
+
+      /* Glassmorphism Utilities */
+      .glass-panel {
+        background: rgba(10, 10, 10, 0.2); /* Increased transparency */
+        backdrop-filter: blur(10px); /* Reduced blur to see background */
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      }
+      
+      .glass-card {
+        background: rgba(0, 0, 0, 0.1); /* Very high transparency */
+        backdrop-filter: blur(5px); /* Light blur */
+        -webkit-backdrop-filter: blur(5px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      
+      .text-gold-gradient {
+        background: linear-gradient(to right, #FBF5B7, #D4AF37, #FBF5B7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-size: 200% auto;
+        animation: shine 6s linear infinite;
+      }
+
+      .shadow-gold-glow {
+        text-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+      }
+
+      @keyframes shine {
+        to {
+          background-position: 200% center;
+        }
+      }
+      
+      .animate-fade-in-up {
+        animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+      
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(40px);
+          filter: blur(4px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+          filter: blur(0);
+        }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1"
+  }
+}
+</script>
+</head>
+  <body class="bg-manifest-950 text-manifest-100 antialiased selection:bg-gold-500/30 selection:text-gold-200">
+    <div id="root">
+      <!-- Loading State for slower connections/builds -->
+      <div style="height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; background-color: #050505;">
+         <svg class="animate-spin h-10 w-10 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+         </svg>
+      </div>
+    </div>
+    <script type="module" src="./index.tsx"></script>
+  </body>
+</html>
