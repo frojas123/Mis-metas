@@ -76,15 +76,36 @@ const getFallbackImage = (text: string, random: boolean = false) => {
   }
 };
 
+/**
+ * Robust API Key Retrieval
+ * Checks standard process.env (Node/Netlify) AND import.meta.env (Vite).
+ */
 const getApiKey = (): string | undefined => {
+  let key: string | undefined = undefined;
+
+  // 1. Try standard process.env (Node/Webpack/Netlify Build)
   try {
-    // @ts-ignore
-    const key = process.env.API_KEY;
-    if (!key || key === 'undefined' || key === '') return undefined;
-    return key;
-  } catch (e) {
-    return undefined;
+     // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      // @ts-ignore
+      key = process.env.API_KEY;
+    }
+  } catch (e) {}
+
+  // 2. Try Vite standard (common in React templates on Netlify)
+  if (!key) {
+    try {
+        // @ts-ignore
+        if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            key = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+        }
+    } catch (e) {}
   }
+
+  // Validate key is not just empty string or 'undefined' string
+  if (!key || key === 'undefined' || key === '') return undefined;
+  return key;
 };
 
 /**
@@ -97,9 +118,13 @@ const enhancePromptForImage = async (userPrompt: string, ai: GoogleGenAI): Promi
       model: 'gemini-2.5-flash',
       contents: {
         parts: [{
-          text: `Translate the following description to English for an AI image generator. 
-          IMPORTANT: Preserve ALL specific details including: Colors, specific Brands (e.g. Ferrari, Rolex, Gucci), Models, and Years. 
-          Do NOT simplify or make it generic. 
+          text: `Translate this Spanish text to a detailed English prompt for an image generator (like Midjourney/DALL-E).
+          RULES:
+          1. Keep it under 40 words.
+          2. PRESERVE EXACTLY: Colors, Brands (Ferrari, Rolex, etc.), Models, Years.
+          3. Do NOT add generic filler like "luxury lifestyle" if it conflicts with the object.
+          4. If it's a car, mention the car clearly.
+          
           Input: "${userPrompt}"`
         }]
       }
@@ -118,7 +143,7 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
   
   // 1. Check API Key validity immediately
   if (!apiKey) {
-    console.log("Modo Offline: Usando imagen de respaldo de lujo.");
+    console.warn("API Key missing. Using fallback.");
     return getFallbackImage(prompt, forceRegen);
   }
 
@@ -126,34 +151,40 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
   try {
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
-    // Step 1: Optimize prompt
+    // Step 1: Optimize prompt (Text Model)
     let finalPrompt = prompt;
     
-    // Only enhance if the prompt is longer than 1 word, but ALWAYS run it to ensure English
-    // The previous logic skipped shorts, which caused "Ferrari Rojo" to stay Spanish and confuse the image model
-    if (prompt.trim().length > 0) {
+    // Only enhance if the prompt is longer than 1 word
+    if (prompt.trim().length > 1) {
         try {
             finalPrompt = await enhancePromptForImage(prompt, ai);
         } catch (err) {
-            console.warn("Translation skipped");
+            console.warn("Translation skipped, using raw prompt.");
         }
     }
     
-    console.log(`Prompt original: ${prompt}`);
-    console.log(`Prompt mejorado (Inglés): ${finalPrompt}`);
+    console.log(`Generating image for: "${finalPrompt}"`);
 
-    // Step 2: Generate Image
-    // We removed "luxury" from the end to prevent it from overriding the subject (e.g. turning a car into a luxury garage)
-    // We added "centered, cinematic" to ensure good framing.
+    // Step 2: Generate Image (Image Model)
+    // We disable safety settings to allow "luxury/wealth" concepts which are sometimes flagged.
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
-            text: `${finalPrompt} . photorealistic, 4k, cinematic lighting, highly detailed.`,
+            text: `${finalPrompt} . photorealistic, 8k, cinematic lighting, highly detailed, masterpiece.`,
           },
         ],
       },
+      config: {
+        // @ts-ignore - Valid config for safety settings in 2.5
+        safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ]
+      }
     });
 
     const candidates = response.candidates;
@@ -168,7 +199,12 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
     throw new Error("No image data in response");
 
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini API Generation Failed:", error);
+    // Explicitly check for safety blocking or quota issues
+    // @ts-ignore
+    if (error.message && error.message.includes("SAFETY")) {
+         console.warn("Image blocked by safety filters.");
+    }
     // CRITICAL: Return Smart Fallback on error
     return getFallbackImage(prompt, forceRegen);
   }
