@@ -147,12 +147,13 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
   
   // 1. Check API Key validity immediately
   if (!apiKey) {
-    console.warn("API Key no encontrada. En Netlify, asegúrate de que tu variable se llame 'VITE_API_KEY'. Usando modo Offline.");
+    console.warn("[Gemini Service] API Key no encontrada. Usando modo Offline.");
     return getFallbackImage(prompt, forceRegen);
   }
 
   // 2. Try Generation
   try {
+    console.log("[Gemini Service] Iniciando generación con API Key detectada.");
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
     // Step 1: Optimize prompt (Text Model)
@@ -167,11 +168,12 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
         }
     }
     
-    console.log(`Generating image for: "${finalPrompt}"`);
+    console.log(`[Gemini Service] Prompt optimizado: "${finalPrompt}"`);
+    console.log(`[Gemini Service] Solicitando imagen a modelo: gemini-2.5-flash-image`);
 
     // Step 2: Generate Image (Image Model)
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-2.5-flash-image', // MODELO OBLIGATORIO SEGUN SOLICITUD
       contents: {
         parts: [
           {
@@ -180,6 +182,11 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
         ],
       },
       config: {
+        // Configuraciones específicas para imagen
+        imageConfig: {
+            aspectRatio: "1:1" 
+        },
+        // Desactivar filtros de seguridad para permitir contenido de "lujo" (marcas, alcohol, etc)
         safetySettings: [
             { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
             { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -193,6 +200,7 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
     if (candidates && candidates.length > 0) {
       for (const part of candidates[0].content.parts) {
         if (part.inlineData && part.inlineData.data) {
+           console.log("[Gemini Service] Imagen generada exitosamente.");
            return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
         }
       }
@@ -201,7 +209,7 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
     throw new Error("No image data in response");
 
   } catch (error) {
-    console.error("Gemini API Generation Failed:", error);
+    console.error("[Gemini Service] Error en generación:", error);
     // CRITICAL: Return Smart Fallback on error
     return getFallbackImage(prompt, forceRegen);
   }
