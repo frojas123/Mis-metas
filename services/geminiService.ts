@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
 // 1. Categorized Fallbacks for Smart Selection
 // Used when API fails or is offline.
@@ -78,28 +78,33 @@ const getFallbackImage = (text: string, random: boolean = false) => {
 
 /**
  * Robust API Key Retrieval
- * Checks standard process.env (Node/Netlify) AND import.meta.env (Vite).
+ * Checks standard process.env (Node/Netlify), import.meta.env (Vite), 
+ * and handles text-replacement by bundlers.
  */
 const getApiKey = (): string | undefined => {
   let key: string | undefined = undefined;
 
-  // 1. Try standard process.env (Node/Webpack/Netlify Build)
+  // 1. Try Vite standard (Recommended for Netlify + React)
+  // NOTE: In Netlify, you MUST name your variable "VITE_API_KEY" for this to work in the browser.
   try {
-     // @ts-ignore
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
       // @ts-ignore
-      key = process.env.API_KEY;
-    }
+      if (typeof import.meta !== 'undefined' && import.meta.env) {
+          // @ts-ignore
+          key = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+      }
   } catch (e) {}
 
-  // 2. Try Vite standard (common in React templates on Netlify)
+  // 2. Try direct replacement (some bundlers replace process.env.API_KEY with "string_literal")
+  // We use try-catch because accessing process might throw ReferenceError if not defined/replaced
   if (!key) {
     try {
-        // @ts-ignore
-        if (typeof import.meta !== 'undefined' && import.meta.env) {
-            // @ts-ignore
-            key = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
-        }
+      // @ts-ignore
+      const processKey = process.env.API_KEY; 
+      if (processKey) key = processKey;
+      
+      // @ts-ignore
+      const processViteKey = process.env.VITE_API_KEY;
+      if (processViteKey) key = processViteKey;
     } catch (e) {}
   }
 
@@ -118,12 +123,11 @@ const enhancePromptForImage = async (userPrompt: string, ai: GoogleGenAI): Promi
       model: 'gemini-2.5-flash',
       contents: {
         parts: [{
-          text: `Translate this Spanish text to a detailed English prompt for an image generator (like Midjourney/DALL-E).
-          RULES:
+          text: `Translate this Spanish text to a detailed English prompt for an image generator.
+          CRITICAL INSTRUCTIONS:
           1. Keep it under 40 words.
-          2. PRESERVE EXACTLY: Colors, Brands (Ferrari, Rolex, etc.), Models, Years.
-          3. Do NOT add generic filler like "luxury lifestyle" if it conflicts with the object.
-          4. If it's a car, mention the car clearly.
+          2. YOU MUST PRESERVE: Colors (Red, Blue, Matte Black), Brands (Ferrari, BMW, Rolex), Specific Models, Years.
+          3. Do NOT generalize. If I say "Red Ferrari", output "Red Ferrari", NOT "Luxury Sports Car".
           
           Input: "${userPrompt}"`
         }]
@@ -143,7 +147,7 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
   
   // 1. Check API Key validity immediately
   if (!apiKey) {
-    console.warn("API Key missing. Using fallback.");
+    console.warn("API Key no encontrada. En Netlify, asegúrate de que tu variable se llame 'VITE_API_KEY'. Usando modo Offline.");
     return getFallbackImage(prompt, forceRegen);
   }
 
@@ -166,23 +170,21 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
     console.log(`Generating image for: "${finalPrompt}"`);
 
     // Step 2: Generate Image (Image Model)
-    // We disable safety settings to allow "luxury/wealth" concepts which are sometimes flagged.
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
-            text: `${finalPrompt} . photorealistic, 8k, cinematic lighting, highly detailed, masterpiece.`,
+            text: `${finalPrompt} . photorealistic, 8k, cinematic lighting, highly detailed.`,
           },
         ],
       },
       config: {
-        // @ts-ignore - Valid config for safety settings in 2.5
         safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         ]
       }
     });
@@ -200,11 +202,6 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
 
   } catch (error) {
     console.error("Gemini API Generation Failed:", error);
-    // Explicitly check for safety blocking or quota issues
-    // @ts-ignore
-    if (error.message && error.message.includes("SAFETY")) {
-         console.warn("Image blocked by safety filters.");
-    }
     // CRITICAL: Return Smart Fallback on error
     return getFallbackImage(prompt, forceRegen);
   }
