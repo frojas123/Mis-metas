@@ -89,11 +89,17 @@ function App() {
      setFormImage(''); // Clear current image to show loading state better
 
      try {
-         // Pass true to force a fresh image (even if using fallback)
+         // Generate image first
          const newImage = await generateWishImage(promptToUse, true);
+         
+         // Add a small artificial delay so the user sees the spinner 
+         // (important if fallback returns instantly, prevents "flicker")
+         await new Promise(resolve => setTimeout(resolve, 800));
+         
          setFormImage(newImage);
      } catch (e) {
          console.error("Failed to regenerate image", e);
+         // Even in total failure, try to set something or alert
          alert("No se pudo generar la imagen. Verifica tu conexión.");
      } finally {
          setRegeneratingImage(false);

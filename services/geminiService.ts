@@ -12,12 +12,20 @@ const LUXURY_FALLBACKS = [
   "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=1000&auto=format&fit=crop", // Elegant House
   "https://images.unsplash.com/photo-1600607686527-6fb886090705?q=80&w=1000&auto=format&fit=crop", // Garden Patio
   "https://images.unsplash.com/photo-1583847668182-f8759530598b?q=80&w=1000&auto=format&fit=crop", // Cinematic Car
+  "https://images.unsplash.com/photo-1563911302283-d2bc129e7c1f?q=80&w=1000&auto=format&fit=crop", // Private Jet
+  "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=1000&auto=format&fit=crop", // Luxury Real Estate
+  "https://images.unsplash.com/photo-1631679706909-1844bbd07221?q=80&w=1000&auto=format&fit=crop", // Modern Furniture
+  "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop", // Abstract Gold
+  "https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?q=80&w=1000&auto=format&fit=crop", // Living Room
 ];
 
 const getFallbackImage = (text: string, random: boolean = false) => {
   if (random) {
-    return LUXURY_FALLBACKS[Math.floor(Math.random() * LUXURY_FALLBACKS.length)];
+    const url = LUXURY_FALLBACKS[Math.floor(Math.random() * LUXURY_FALLBACKS.length)];
+    // Append a random cache-buster param to ensure React sees it as a new URL even if it picks the same base image
+    return `${url}&v=${Date.now()}`;
   }
+  
   // Simple hash to consistently pick the same fallback for the same title
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
@@ -25,6 +33,20 @@ const getFallbackImage = (text: string, random: boolean = false) => {
   }
   const index = Math.abs(hash) % LUXURY_FALLBACKS.length;
   return LUXURY_FALLBACKS[index];
+};
+
+// Safe access to process.env to prevent crashes in browsers where process is undefined
+const getApiKey = (): string | undefined => {
+  try {
+    // @ts-ignore - process might not be defined in all browser builds
+    if (typeof process !== 'undefined' && process.env) {
+       // @ts-ignore
+       return process.env.API_KEY;
+    }
+  } catch (e) {
+    return undefined;
+  }
+  return undefined;
 };
 
 /**
@@ -55,24 +77,26 @@ const enhancePromptForImage = async (userPrompt: string, ai: GoogleGenAI): Promi
  * Generates an image based on the wish description using Gemini 2.5 Flash Image.
  * @param prompt The description of the wish.
  * @param forceRegen If true, allows returning a random fallback if API fails, to ensure visual change.
- * @returns A base64 string of the image.
+ * @returns A base64 string of the image or a fallback URL.
  */
 export const generateWishImage = async (prompt: string, forceRegen: boolean = false): Promise<string> => {
-  // Robust Safety check for API Key
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-    console.error("API_KEY is missing or invalid in process.env");
+  // 1. Safe API Key Check
+  const apiKey = getApiKey();
+  const isValidKey = apiKey && apiKey !== 'undefined' && apiKey.trim().length > 20;
+
+  if (!isValidKey) {
+    console.log("Modo Offline: Usando imagen de respaldo de lujo.");
     return getFallbackImage(prompt, forceRegen);
   }
 
+  // 2. Try Generation with Safe Failover
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
     
     // Step 1: Optimize prompt (Spanish -> English Visual Description)
-    // This dramatically increases success rate on the image model
     const enhancedPrompt = await enhancePromptForImage(prompt, ai);
     
-    console.log("Generando imagen con prompt:", enhancedPrompt);
+    console.log("Generando imagen con IA...");
 
     // Step 2: Generate Image
     const response = await ai.models.generateContent({
@@ -99,8 +123,8 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
     console.warn("Gemini produced no image data, using fallback.");
     return getFallbackImage(prompt, forceRegen);
   } catch (error) {
-    console.error("Error generating image:", error);
-    // Return a dynamic fallback based on forceRegen so the button actually changes the image visually
+    console.error("Error en generación de imagen (usando respaldo):", error);
+    // Return a dynamic fallback so the user always sees an image
     return getFallbackImage(prompt, forceRegen);
   }
 };
@@ -109,13 +133,15 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
  * Generates a short action plan using Gemini Text model.
  */
 export const generateActionPlan = async (title: string, amount: number): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey === 'undefined' || apiKey === '') {
-    return "1. Configura tu API KEY correctamente.\n2. Verifica tu conexión.\n3. Disfruta visualizando tus metas.";
+  const apiKey = getApiKey();
+  const isValidKey = apiKey && apiKey !== 'undefined' && apiKey.trim().length > 20;
+
+  if (!isValidKey) {
+    return "1. Define tu objetivo con claridad absoluta.\n2. Ahorra e invierte el 20% de tus ingresos consistentemente.\n3. Visualiza el éxito diariamente y actúa como si ya fuera tuyo.";
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: apiKey! });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: {
