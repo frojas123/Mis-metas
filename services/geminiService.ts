@@ -78,39 +78,60 @@ const getFallbackImage = (text: string, random: boolean = false) => {
 
 /**
  * Robust API Key Retrieval
- * Checks standard process.env (Node/Netlify), import.meta.env (Vite), 
- * and handles text-replacement by bundlers.
+ * Explicitly tries multiple environment variable patterns to ensure bundler replacement.
  */
 const getApiKey = (): string | undefined => {
-  let key: string | undefined = undefined;
+  console.log("[Gemini Service] Intentando detectar API Key...");
 
-  // 1. Try Vite standard (Recommended for Netlify + React)
-  // NOTE: In Netlify, you MUST name your variable "VITE_API_KEY" for this to work in the browser.
+  // 1. Try import.meta.env (Vite Standard)
+  // We access properties DIRECTLY so Vite can statically replace them.
   try {
       // @ts-ignore
-      if (typeof import.meta !== 'undefined' && import.meta.env) {
+      if (import.meta && import.meta.env) {
           // @ts-ignore
-          key = import.meta.env.VITE_API_KEY || import.meta.env.API_KEY;
+          if (import.meta.env.VITE_API_KEY) {
+             console.log("[Gemini Service] API Key detectada en import.meta.env.VITE_API_KEY");
+             // @ts-ignore
+             return import.meta.env.VITE_API_KEY;
+          }
+          // @ts-ignore
+          if (import.meta.env.API_KEY) {
+             console.log("[Gemini Service] API Key detectada en import.meta.env.API_KEY");
+             // @ts-ignore
+             return import.meta.env.API_KEY;
+          }
       }
-  } catch (e) {}
-
-  // 2. Try direct replacement (some bundlers replace process.env.API_KEY with "string_literal")
-  // We use try-catch because accessing process might throw ReferenceError if not defined/replaced
-  if (!key) {
-    try {
-      // @ts-ignore
-      const processKey = process.env.API_KEY; 
-      if (processKey) key = processKey;
-      
-      // @ts-ignore
-      const processViteKey = process.env.VITE_API_KEY;
-      if (processViteKey) key = processViteKey;
-    } catch (e) {}
+  } catch (e) {
+      console.log("[Gemini Service] Error checkeando import.meta", e);
   }
 
-  // Validate key is not just empty string or 'undefined' string
-  if (!key || key === 'undefined' || key === '') return undefined;
-  return key;
+  // 2. Try process.env (Webpack / Node / Some Vite configs)
+  // We access properties DIRECTLY so bundlers can statically replace them.
+  // We wrap in try/catch in case 'process' is not defined in the browser.
+  try {
+      // @ts-ignore
+      if (process.env.VITE_API_KEY) {
+          console.log("[Gemini Service] API Key detectada en process.env.VITE_API_KEY");
+          // @ts-ignore
+          return process.env.VITE_API_KEY;
+      }
+      // @ts-ignore
+      if (process.env.API_KEY) {
+          console.log("[Gemini Service] API Key detectada en process.env.API_KEY");
+          // @ts-ignore
+          return process.env.API_KEY;
+      }
+      // @ts-ignore
+      if (process.env.REACT_APP_API_KEY) {
+          console.log("[Gemini Service] API Key detectada en process.env.REACT_APP_API_KEY");
+          // @ts-ignore
+          return process.env.REACT_APP_API_KEY;
+      }
+  } catch (e) {
+     // Ignore ReferenceError: process is not defined
+  }
+
+  return undefined;
 };
 
 /**
@@ -147,13 +168,13 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
   
   // 1. Check API Key validity immediately
   if (!apiKey) {
-    console.warn("[Gemini Service] API Key no encontrada. Usando modo Offline.");
+    console.warn("[Gemini Service] API Key no encontrada (getApiKey devolvió undefined). Usando modo Offline.");
     return getFallbackImage(prompt, forceRegen);
   }
 
   // 2. Try Generation
   try {
-    console.log("[Gemini Service] Iniciando generación con API Key detectada.");
+    console.log("[Gemini Service] Inicializando GoogleGenAI con la Key detectada.");
     const ai = new GoogleGenAI({ apiKey: apiKey });
     
     // Step 1: Optimize prompt (Text Model)
@@ -173,7 +194,7 @@ export const generateWishImage = async (prompt: string, forceRegen: boolean = fa
 
     // Step 2: Generate Image (Image Model)
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image', // MODELO OBLIGATORIO SEGUN SOLICITUD
+      model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
