@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Wish, Category, Importance } from './types';
 import VisionBoardHero from './components/VisionBoardHero';
 import WishCard from './components/WishCard';
 import { generateWishImage, generateActionPlan, getApiKey } from './services/geminiService';
-import { Plus, X, Loader2, Sparkles, Wallet, RefreshCw, Trophy, Target, BrainCircuit, LayoutGrid, ChevronDown, Wand2, Trash2, AlertTriangle, Fish, WifiOff, Wifi } from 'lucide-react';
+import { Plus, X, Loader2, Sparkles, Wallet, RefreshCw, Trophy, Target, BrainCircuit, LayoutGrid, ChevronDown, Wand2, Trash2, AlertTriangle, Fish, WifiOff, Wifi, Upload, Link as LinkIcon, Image as ImageIcon } from 'lucide-react';
 
 function App() {
   // Start empty to force user to create
@@ -43,6 +43,10 @@ function App() {
   const [formDate, setFormDate] = useState('');
   const [formPlan, setFormPlan] = useState('');
 
+  // Image Source Tab State
+  const [imageTab, setImageTab] = useState<'ai' | 'manual'>('ai');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     localStorage.setItem('my_luxury_wishes', JSON.stringify(wishes));
   }, [wishes]);
@@ -52,6 +56,37 @@ function App() {
     const key = getApiKey();
     setIsOffline(!key);
   }, []);
+
+  // Paste Listener for Modal
+  useEffect(() => {
+    if (!showModal) return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.clipboardData && e.clipboardData.items) {
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+          const item = e.clipboardData.items[i];
+          if (item.type.indexOf("image") !== -1) {
+            const blob = item.getAsFile();
+            if (blob) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const result = event.target?.result as string;
+                    if (result) {
+                        setFormImage(result);
+                        setImageTab('manual'); // Auto switch to manual to show the user what happened
+                    }
+                };
+                reader.readAsDataURL(blob);
+                e.preventDefault(); // Stop pasting into text inputs if it's an image
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [showModal]);
 
   const resetForm = () => {
     setFormTitle('');
@@ -64,6 +99,7 @@ function App() {
     setFormDate('');
     setFormPlan('');
     setEditingWishId(null);
+    setImageTab('ai');
   };
 
   const openCreateModal = () => {
@@ -82,6 +118,7 @@ function App() {
     setFormDate(wish.targetDate || '');
     setFormPlan(wish.actionPlan || '');
     setFormPrompt(''); 
+    setImageTab('ai'); // Default to AI, but user can switch if they want to change image manually
     setShowModal(true);
   };
 
@@ -115,6 +152,21 @@ function App() {
      }
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        // Check size? Optional.
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const result = event.target?.result as string;
+            if (result) {
+                setFormImage(result);
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+
   const handleGeneratePlan = async () => {
     if (!formTitle || !formCost) {
         alert("Por favor ingresa un título y costo primero.");
@@ -141,7 +193,7 @@ function App() {
         let finalImageUrl = formImage;
 
         // Generate image if it's a new wish or if user cleared the image (and didn't manually regenerate)
-        // If formImage is already set (by manual regeneration), we skip this.
+        // If formImage is already set (by manual regeneration OR upload), we skip this.
         if (!finalImageUrl) {
             const imagePrompt = formPrompt || formDesc || formTitle;
             finalImageUrl = await generateWishImage(imagePrompt);
@@ -421,14 +473,15 @@ function App() {
                              ) : (
                                 <div>
                                     <Sparkles className="mx-auto mb-4 opacity-20" size={64} />
-                                    <p className="text-xs uppercase tracking-widest">La imagen se generará al guardar</p>
+                                    <p className="text-xs uppercase tracking-widest">La imagen se generará con IA</p>
+                                    <p className="text-[9px] text-manifest-600 mt-2">O pega una imagen (Ctrl + V)</p>
                                 </div>
                              )}
                          </div>
                      )}
                      
-                     {/* Regenerate Button Overlay - Always visible if not loading */}
-                     {!regeneratingImage && (
+                     {/* Regenerate Button Overlay - Only visible in AI mode */}
+                     {!regeneratingImage && imageTab === 'ai' && (
                         <div className="absolute top-6 right-6 z-20">
                             <button
                                 type="button"
@@ -442,19 +495,78 @@ function App() {
                      )}
                 </div>
 
-                {/* Custom Prompt Input - Placed above Plan as requested */}
-                <div className="px-4 md:px-8 py-4 bg-manifest-950/80 backdrop-blur-md border-t border-white/10 z-10 relative">
-                    <label className="text-[10px] uppercase tracking-widest text-gold-500 font-bold mb-2 flex items-center gap-2">
-                        <Wand2 size={12} /> Prompt Personalizado para IA
-                    </label>
-                    <div className="relative">
-                        <input
-                            type="text"
-                            value={formPrompt}
-                            onChange={(e) => setFormPrompt(e.target.value)}
-                            placeholder="Ej: Mansión moderna en acantilado, atardecer, estilo futurista..."
-                            className="w-full px-4 py-4 bg-black/40 border border-white/10 rounded-lg text-sm text-manifest-100 focus:border-gold-500 outline-none placeholder:text-manifest-600 transition-colors"
-                        />
+                {/* VISUAL SOURCE TOOLS (REPLACES OLD PROMPT INPUT) */}
+                <div className="bg-manifest-950/80 backdrop-blur-md border-t border-white/10 z-10 relative flex flex-col">
+                    {/* Tabs */}
+                    <div className="flex border-b border-white/5">
+                        <button 
+                            type="button"
+                            onClick={() => setImageTab('ai')}
+                            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-colors ${imageTab === 'ai' ? 'bg-white/5 text-gold-400 border-b-2 border-gold-500' : 'text-manifest-500 hover:text-white'}`}
+                        >
+                            <Sparkles size={14} /> Generar IA
+                        </button>
+                        <button 
+                             type="button"
+                            onClick={() => setImageTab('manual')}
+                            className={`flex-1 py-3 text-[10px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-colors ${imageTab === 'manual' ? 'bg-white/5 text-gold-400 border-b-2 border-gold-500' : 'text-manifest-500 hover:text-white'}`}
+                        >
+                            <ImageIcon size={14} /> Subir / Link
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4 md:px-8 md:py-6">
+                        {imageTab === 'ai' ? (
+                             <div className="space-y-3">
+                                  <label className="text-[10px] uppercase tracking-widest text-gold-500 font-bold flex items-center gap-2">
+                                        <Wand2 size={12} /> Prompt Personalizado
+                                  </label>
+                                  <div className="relative">
+                                    <input
+                                        type="text"
+                                        value={formPrompt}
+                                        onChange={(e) => setFormPrompt(e.target.value)}
+                                        placeholder="Ej: Mansión moderna en acantilado..."
+                                        className="w-full px-4 py-3 bg-black/40 border border-white/10 rounded-lg text-sm text-manifest-100 focus:border-gold-500 outline-none placeholder:text-manifest-600 transition-colors"
+                                    />
+                                  </div>
+                             </div>
+                        ) : (
+                             <div className="space-y-4">
+                                  {/* Upload Button */}
+                                  <div 
+                                      onClick={() => fileInputRef.current?.click()}
+                                      className="border border-dashed border-white/20 rounded-xl p-4 flex flex-col items-center justify-center text-manifest-400 hover:bg-white/5 hover:border-gold-500/50 hover:text-gold-200 cursor-pointer transition-all group"
+                                  >
+                                      <Upload size={24} className="mb-2 group-hover:scale-110 transition-transform" />
+                                      <span className="text-xs font-medium">Click para subir imagen</span>
+                                      <span className="text-[9px] uppercase tracking-wider opacity-60 mt-1">O pega con Ctrl + V</span>
+                                  </div>
+                                  <input 
+                                      type="file" 
+                                      ref={fileInputRef} 
+                                      className="hidden" 
+                                      accept="image/*"
+                                      onChange={handleFileUpload}
+                                  />
+                                  
+                                  {/* URL Input */}
+                                  <div className="space-y-2">
+                                       <label className="text-[10px] uppercase tracking-widest text-manifest-500 font-bold ml-1 block">O inserta un enlace</label>
+                                       <div className="relative">
+                                           <input 
+                                               type="text"
+                                               placeholder="https://ejemplo.com/imagen.jpg"
+                                               value={formImage.startsWith('data:') ? '' : formImage} 
+                                               onChange={(e) => setFormImage(e.target.value)}
+                                               className="w-full pl-9 pr-4 py-3 bg-black/40 border border-white/10 rounded-lg text-xs text-manifest-100 focus:border-gold-500 outline-none"
+                                           />
+                                           <LinkIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-manifest-500" />
+                                       </div>
+                                  </div>
+                             </div>
+                        )}
                     </div>
                 </div>
 
