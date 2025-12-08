@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Wish, Category, Importance } from './types';
 import VisionBoardHero from './components/VisionBoardHero';
 import WishCard from './components/WishCard';
-import { generateWishImage, generateActionPlan } from './services/geminiService';
-import { Plus, X, Loader2, Sparkles, Wallet, RefreshCw, Trophy, Target, BrainCircuit, LayoutGrid, ChevronDown, Wand2, Trash2, AlertTriangle, Fish } from 'lucide-react';
+import { generateWishImage, generateActionPlan, getApiKey } from './services/geminiService';
+import { Plus, X, Loader2, Sparkles, Wallet, RefreshCw, Trophy, Target, BrainCircuit, LayoutGrid, ChevronDown, Wand2, Trash2, AlertTriangle, Fish, WifiOff, Wifi } from 'lucide-react';
 
 function App() {
   // Start empty to force user to create
@@ -17,6 +17,9 @@ function App() {
   const [regeneratingImage, setRegeneratingImage] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   
+  // Connection Status
+  const [isOffline, setIsOffline] = useState(false);
+
   // Category Filter State
   const [selectedCategory, setSelectedCategory] = useState<string>('TODOS');
   
@@ -43,6 +46,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem('my_luxury_wishes', JSON.stringify(wishes));
   }, [wishes]);
+
+  // Check API Key on mount
+  useEffect(() => {
+    const key = getApiKey();
+    setIsOffline(!key);
+  }, []);
 
   const resetForm = () => {
     setFormTitle('');
@@ -229,8 +238,23 @@ function App() {
   const filterCategories = ['TODOS', ...Object.values(Category)];
 
   return (
-    <div className="min-h-screen pb-20 bg-manifest-950 font-sans selection:bg-gold-500/30 selection:text-gold-200">
+    <div className="min-h-screen pb-20 bg-manifest-950 font-sans selection:bg-gold-500/30 selection:text-gold-200 relative">
       
+      {/* Status Indicator */}
+      <div className="fixed top-4 right-4 z-[40] pointer-events-none">
+         {isOffline ? (
+             <div className="flex items-center gap-2 px-3 py-1.5 bg-red-950/80 border border-red-500/30 rounded-full backdrop-blur-md">
+                <WifiOff size={12} className="text-red-400" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-red-200">Offline / Demo</span>
+             </div>
+         ) : (
+             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-950/20 border border-green-500/10 rounded-full backdrop-blur-md opacity-50 hover:opacity-100 transition-opacity">
+                <Wifi size={12} className="text-green-500" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-green-200">AI Connected</span>
+             </div>
+         )}
+      </div>
+
       {/* Celebration Overlay */}
       {celebratingWish && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-in fade-in duration-700">

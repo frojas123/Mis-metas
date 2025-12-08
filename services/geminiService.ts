@@ -80,56 +80,27 @@ const getFallbackImage = (text: string, random: boolean = false) => {
  * Robust API Key Retrieval
  * Explicitly tries multiple environment variable patterns to ensure bundler replacement.
  */
-const getApiKey = (): string | undefined => {
-  console.log("[Gemini Service] Intentando detectar API Key...");
-
+export const getApiKey = (): string | undefined => {
   // 1. Try import.meta.env (Vite Standard)
-  // We access properties DIRECTLY so Vite can statically replace them.
   try {
       // @ts-ignore
       if (import.meta && import.meta.env) {
           // @ts-ignore
-          if (import.meta.env.VITE_API_KEY) {
-             console.log("[Gemini Service] API Key detectada en import.meta.env.VITE_API_KEY");
-             // @ts-ignore
-             return import.meta.env.VITE_API_KEY;
-          }
+          if (import.meta.env.VITE_API_KEY) return import.meta.env.VITE_API_KEY;
           // @ts-ignore
-          if (import.meta.env.API_KEY) {
-             console.log("[Gemini Service] API Key detectada en import.meta.env.API_KEY");
-             // @ts-ignore
-             return import.meta.env.API_KEY;
-          }
+          if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
       }
-  } catch (e) {
-      console.log("[Gemini Service] Error checkeando import.meta", e);
-  }
+  } catch (e) {}
 
   // 2. Try process.env (Webpack / Node / Some Vite configs)
-  // We access properties DIRECTLY so bundlers can statically replace them.
-  // We wrap in try/catch in case 'process' is not defined in the browser.
   try {
       // @ts-ignore
-      if (process.env.VITE_API_KEY) {
-          console.log("[Gemini Service] API Key detectada en process.env.VITE_API_KEY");
-          // @ts-ignore
-          return process.env.VITE_API_KEY;
-      }
+      if (process.env.VITE_API_KEY) return process.env.VITE_API_KEY;
       // @ts-ignore
-      if (process.env.API_KEY) {
-          console.log("[Gemini Service] API Key detectada en process.env.API_KEY");
-          // @ts-ignore
-          return process.env.API_KEY;
-      }
+      if (process.env.API_KEY) return process.env.API_KEY;
       // @ts-ignore
-      if (process.env.REACT_APP_API_KEY) {
-          console.log("[Gemini Service] API Key detectada en process.env.REACT_APP_API_KEY");
-          // @ts-ignore
-          return process.env.REACT_APP_API_KEY;
-      }
-  } catch (e) {
-     // Ignore ReferenceError: process is not defined
-  }
+      if (process.env.REACT_APP_API_KEY) return process.env.REACT_APP_API_KEY;
+  } catch (e) {}
 
   return undefined;
 };
